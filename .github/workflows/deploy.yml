@@ -1,0 +1,60 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    # 如果有前端代码，添加前端构建步骤
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+      if: hashFiles('frontend/package.json') != ''
+    
+    - name: Install Frontend Dependencies
+      run: |
+        cd frontend
+        npm install
+      if: hashFiles('frontend/package.json') != ''
+    
+    - name: Build Frontend
+      run: |
+        cd frontend
+        npm run build
+      if: hashFiles('frontend/package.json') != ''
+    
+    # 这里使用SSH部署到你的服务器
+    # 注意：你需要在GitHub仓库设置中添加相应的secrets
+    - name: Deploy to Server
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          cd /path/to/your/project
+          git pull
+          source venv/bin/activate
+          pip install -r requirements.txt
+          python manage.py migrate
+          python manage.py collectstatic --noinput
+          # 重启服务
+          sudo systemctl restart gunicorn
+          sudo systemctl restart nginx
